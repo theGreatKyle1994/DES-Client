@@ -1,0 +1,98 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <RootNamespace>DES</RootNamespace>
+        <Nullable>disable</Nullable>
+        <Authors>TaintedHex</Authors>
+        <AssemblyVersion>0.0.1</AssemblyVersion>
+        <FileVersion>$(AssemblyVersion)</FileVersion>
+        <Version>$(AssemblyVersion)</Version>
+        <Configurations>Debug;Release;Package</Configurations>
+        <LangVersion>latest</LangVersion>
+        <FileAlignment>512</FileAlignment>
+        <Deterministic>true</Deterministic>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+        <DebugSymbols>true</DebugSymbols>
+        <DebugType>full</DebugType>
+        <Optimize>false</Optimize>
+        <OutputPath>bin\Debug\</OutputPath>
+        <DefineConstants>DEBUG;TRACE</DefineConstants>
+        <ErrorReport>prompt</ErrorReport>
+        <WarningLevel>4</WarningLevel>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+        <DebugType>pdbonly</DebugType>
+        <Optimize>true</Optimize>
+        <OutputPath>bin\Release\</OutputPath>
+        <DefineConstants>TRACE</DefineConstants>
+        <ErrorReport>prompt</ErrorReport>
+        <WarningLevel>4</WarningLevel>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Reference Include="0Harmony">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\0Harmony.dll</HintPath>
+        </Reference>
+        <Reference Include="Assembly-CSharp">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\Assembly-CSharp.dll</HintPath>
+        </Reference>
+        <Reference Include="BepInEx">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\BepInEx.dll</HintPath>
+        </Reference>
+        <Reference Include="Comfort">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\Comfort.dll</HintPath>
+        </Reference>
+        <Reference Include="Comfort.Unity">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\Comfort.Unity.dll</HintPath>
+        </Reference>
+        <Reference Include="Newtonsoft.Json">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\Newtonsoft.Json.dll</HintPath>
+        </Reference>
+        <Reference Include="Sirenix.Serialization">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\Sirenix.Serialization.dll</HintPath>
+        </Reference>
+        <Reference Include="spt-common">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\spt-common.dll</HintPath>
+        </Reference>
+        <Reference Include="spt-reflection">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\spt-reflection.dll</HintPath>
+        </Reference>
+        <Reference Include="System">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\System.dll</HintPath>
+        </Reference>
+        <Reference Include="Unity.TextMeshPro">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\Unity.TextMeshPro.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\UnityEngine.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.AssetBundleModule">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\UnityEngine.AssetBundleModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\UnityEngine.CoreModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.IMGUIModule">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\UnityEngine.IMGUIModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.InputLegacyModule">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\UnityEngine.InputLegacyModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.PhysicsModule">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\UnityEngine.PhysicsModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.TextRenderingModule">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\UnityEngine.TextRenderingModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.UI">
+            <HintPath>..\..\..\..\..\SPTAssemblies\311x\UnityEngine.UI.dll</HintPath>
+        </Reference>
+    </ItemGroup>
+
+    <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+        <Exec Command="copy &quot;$(TargetPath)&quot; &quot;$(ProjectDir)\..\..\..\..\..\SPT311-DEV\BepInEx\plugins\DES\$(TargetFileName)&quot;"/>
+    </Target>
+</Project>
