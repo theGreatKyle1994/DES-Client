@@ -63,6 +63,9 @@
         <Reference Include="System">
             <HintPath>..\..\..\..\..\SPTAssemblies\311x\System.dll</HintPath>
         </Reference>
+        <Reference Include="Unity.Postprocessing.Runtime">
+          <HintPath>..\..\..\..\..\SPTAssemblies\311x\Unity.Postprocessing.Runtime.dll</HintPath>
+        </Reference>
         <Reference Include="Unity.TextMeshPro">
             <HintPath>..\..\..\..\..\SPTAssemblies\311x\Unity.TextMeshPro.dll</HintPath>
         </Reference>
