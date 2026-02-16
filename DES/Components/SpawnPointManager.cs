@@ -1,14 +1,19 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using BepInEx;
+using BepInEx.Logging;
 using static EFT.UI.ConsoleScreen;
 using EFT.Game.Spawning;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 namespace DES.Components;
 
 public class SpawnPointManager : MonoBehaviour
 {
+	private ManualLogSource _logger = Plugin.Log;
+	
 	private float _screenScale = 1.0f;
 	private GUIStyle _guiStyle;
 	
@@ -36,10 +41,13 @@ public class SpawnPointManager : MonoBehaviour
 	{
 		_zoneNames.Clear();
 		_spawnZoneGroups.Clear();
+		_gameSpawnPoints.Clear();
 	}
 	
 	private void OnGUI()
 	{
+		if (!Plugin.SPMGUIEnabled.Value) return;
+		
 		// Create GUIStyle once
 		_guiStyle ??= new GUIStyle(GUI.skin.box)
 		{
@@ -61,10 +69,21 @@ public class SpawnPointManager : MonoBehaviour
 				// Limit distance of markers
 				var camPos = _cam.transform.position;
 				var dist = Mathf.RoundToInt((spawnInstance.Spawn.Position - camPos).magnitude);
-				if (!(dist < 300f)) continue;
+				
+				// Calculate height offset for birdseye rendering
+				var heightRange =
+						(1 -
+						 (Mathf.RoundToInt(Math.Abs(camPos.y - spawnInstance.Spawn.Position.y)) -
+						  Plugin.RenderRange.Value) /
+						 (Plugin.OpacityRange.Value - Plugin.RenderRange.Value) +
+						 1);
+				if (heightRange < 1f) { heightRange = 1f; }
+				
+				// Limit distance of markers
+				if (!(dist < Plugin.RenderRange.Value * heightRange)) continue;
 				
 				// Set gui box size / postion and text
-				SetGUIText(dist, spawnInstance, zoneGroup);
+				SetGUIText(dist, heightRange, spawnInstance, zoneGroup);
 				SetGUIBoxSize(screenPos, spawnInstance);
 				
 				// Render gui instance
@@ -81,10 +100,14 @@ public class SpawnPointManager : MonoBehaviour
 		spawnInstance.Display.size = guiSize;
 	}
 	
-	private void SetGUIText(int cameraDistance, SpawnInstance spawnInstance, string zoneGroup)
+	private void SetGUIText(int cameraDistance, float heightRange, SpawnInstance spawnInstance, string zoneGroup)
 	{
 		// Calculate alpha for fade-out based on distance
-		var alpha = (cameraDistance - 150f) / (0f - 150f) * 1f;
+		var alpha = Plugin.UseOpacity.Value
+				? (cameraDistance - Plugin.RenderRange.Value * heightRange) /
+				  (Plugin.OpacityRange.Value * heightRange - Plugin.RenderRange.Value * heightRange) *
+				  1f
+				: 1f;
 		alpha = alpha switch { > 1f => 1f, < 0.01f => 0f, _ => alpha };
 		GUI.backgroundColor = new Color(0f, 0f, 0f, alpha);
 		
@@ -112,14 +135,20 @@ public class SpawnPointManager : MonoBehaviour
 					_spawnZoneGroups.Add(spawn.SpawnPoint.BotZoneName, []);
 					_zoneNames.Add(spawn.SpawnPoint.BotZoneName);
 				}
-			} else if (!_spawnZoneGroups.ContainsKey("Ungrouped")) { _spawnZoneGroups.Add("Ungrouped", []); }
+			} else if (!_spawnZoneGroups.ContainsKey("Ungrouped"))
+			{
+				_spawnZoneGroups.Add("Ungrouped", []);
+				_zoneNames.Add("Ungrouped");
+			}
 			CreateMarkerData(spawn);
 		}
 		Log($"Found {_zoneNames.Count} total zones.");
 		
 		// Get zone color group
-		foreach (var zoneGroup in _spawnZoneGroups.Keys)
+		foreach (var zoneGroup in _zoneNames)
 		{
+			Log($"{zoneGroup}");
+			
 			// Use random color
 			var randomColor = zoneGroup != "Ungrouped"
 					? new Color(Random.Range(0f, 1f), Random.Range(0f, 1f), Random.Range(0f, 1f), 0f)
