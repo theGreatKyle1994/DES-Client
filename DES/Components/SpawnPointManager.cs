@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using BepInEx;
 using BepInEx.Logging;
-using static EFT.UI.ConsoleScreen;
 using EFT.Game.Spawning;
 using UnityEngine;
 using Random = UnityEngine.Random;
+using static EFT.UI.ConsoleScreen;
+using static DES.ConfigUI.Configuration;
 
 namespace DES.Components;
 
@@ -46,7 +47,7 @@ public class SpawnPointManager : MonoBehaviour
 	
 	private void OnGUI()
 	{
-		if (!Plugin.SPMGUIEnabled.Value) return;
+		if (!useOverlay.Value) return;
 		
 		// Create GUIStyle once
 		_guiStyle ??= new GUIStyle(GUI.skin.box)
@@ -63,27 +64,16 @@ public class SpawnPointManager : MonoBehaviour
 			foreach (var spawnInstance in _spawnZoneGroups[zoneGroup])
 			{
 				// Ignore behind camera
-				var screenPos = _cam.WorldToScreenPoint(spawnInstance.Spawn.Position + (Vector3.up * 1.5f));
+				var screenPos = _cam.WorldToScreenPoint(spawnInstance.Spawn.Position + Vector3.up * 1.5f);
 				if (screenPos.z <= 0) continue;
 				
 				// Limit distance of markers
-				var camPos = _cam.transform.position;
-				var dist = Mathf.RoundToInt((spawnInstance.Spawn.Position - camPos).magnitude);
-				
-				// Calculate height offset for birdseye rendering
-				var heightRange =
-						(1 -
-						 (Mathf.RoundToInt(Math.Abs(camPos.y - spawnInstance.Spawn.Position.y)) -
-						  Plugin.RenderRange.Value) /
-						 (Plugin.OpacityRange.Value - Plugin.RenderRange.Value) +
-						 1);
-				if (heightRange < 1f) { heightRange = 1f; }
-				
-				// Limit distance of markers
-				if (!(dist < Plugin.RenderRange.Value * heightRange)) continue;
+				var dist = (spawnInstance.Spawn.Position - _cam.transform.position).magnitude;
+				var heightMult = GetHeightMult(spawnInstance);
+				if (!(dist < RenderRange.Value * heightMult)) continue;
 				
 				// Set gui box size / postion and text
-				SetGUIText(dist, heightRange, spawnInstance, zoneGroup);
+				SetGUIText(dist, heightMult, spawnInstance, zoneGroup);
 				SetGUIBoxSize(screenPos, spawnInstance);
 				
 				// Render gui instance
@@ -95,23 +85,24 @@ public class SpawnPointManager : MonoBehaviour
 	private void SetGUIBoxSize(Vector3 screenPosition, SpawnInstance spawnInstance)
 	{
 		var guiSize = _guiStyle.CalcSize(spawnInstance.GUIText);
-		spawnInstance.Display.x = (screenPosition.x * _screenScale) - (guiSize.x / 2);
-		spawnInstance.Display.y = Screen.height - ((screenPosition.y * _screenScale) + guiSize.y);
+		spawnInstance.Display.x = screenPosition.x * _screenScale - guiSize.x / 2;
+		spawnInstance.Display.y = Screen.height - (screenPosition.y * _screenScale + guiSize.y);
 		spawnInstance.Display.size = guiSize;
 	}
 	
-	private void SetGUIText(int cameraDistance, float heightRange, SpawnInstance spawnInstance, string zoneGroup)
+	private void SetGUIText(float cameraDistance, float heightMult, SpawnInstance spawnInstance, string zoneGroup)
 	{
 		// Calculate alpha for fade-out based on distance
-		var alpha = Plugin.UseOpacity.Value
-				? (cameraDistance - Plugin.RenderRange.Value * heightRange) /
-				  (Plugin.OpacityRange.Value * heightRange - Plugin.RenderRange.Value * heightRange) *
-				  1f
-				: 1f;
-		alpha = alpha switch { > 1f => 1f, < 0.01f => 0f, _ => alpha };
-		GUI.backgroundColor = new Color(0f, 0f, 0f, alpha);
+		var alpha = 1f;
+		if (UseOpacity.Value)
+		{
+			alpha = Mathf.Clamp((cameraDistance - RenderRange.Value * heightMult) /
+			                    (OpacityRange.Value * heightMult - RenderRange.Value * heightMult) *
+			                    1f, 0f, 1f);
+		}
 		
 		// Convert text colors to html color codes
+		GUI.backgroundColor = new Color(0f, 0f, 0f, alpha);
 		var labelColor = ColorUtility.ToHtmlStringRGBA(new Color(1f, 1f, 1f, alpha));
 		var zoneColor = ColorUtility.ToHtmlStringRGBA(spawnInstance.ZoneGroupColor.SetAlpha(alpha));
 		
@@ -172,6 +163,20 @@ public class SpawnPointManager : MonoBehaviour
 		{
 				Spawn = spawn, Marker = marker, GUIText = new GUIContent(), Display = new Rect(),
 		});
+	}
+	
+	private float GetHeightMult(SpawnInstance spawnInstance)
+	{
+		if (!UseBirdseye.Value) return 1f;
+		
+		// Calculate height multiplier for birdseye rendering
+		var heightMult = 1f -
+		                 (Math.Abs(_cam.transform.position.y - spawnInstance.Spawn.Position.y) -
+		                  RenderRange.Value) /
+		                 (1f - RenderRange.Value) +
+		                 1f;
+		if (heightMult < 1f) { heightMult = 1f; }
+		return heightMult * BirdsEyeMult.Value * 4f;
 	}
 	
 	private class SpawnInstance
