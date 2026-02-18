@@ -1,28 +1,40 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using BepInEx;
 using BepInEx.Logging;
+using EFT.Communications;
 using EFT.Game.Spawning;
 using UnityEngine;
 using Random = UnityEngine.Random;
 using static EFT.UI.ConsoleScreen;
 using static DES.ConfigUI.Configuration;
+using static DES.Methods.Methods;
 
 namespace DES.Components;
 
 public class SpawnPointManager : MonoBehaviour
 {
+	// General Fields
 	private ManualLogSource _logger = Plugin.Log;
+	private readonly StringBuilder _sb = new();
 	
+	// Scale Fields
 	private float _screenScale = 1.0f;
-	private GUIStyle _guiStyle;
 	private Camera _cam;
 	
+	// GUI Fields
+	private GUIStyle _guiStyle;
+	private readonly Color _backGroundColor = new(0f, 0f, 0f, 1f);
+	private readonly Color _labelColor = new(1f, 1f, 1f, 1f);
+	
+	// Spawn Fields
 	private List<SpawnPointMarker> _gameSpawnPoints = [];
 	private readonly HashSet<string> _zoneNames = [];
 	private readonly Dictionary<string, List<SpawnInstance>> _spawnZoneGroups = new();
 	
+	// Rendering Fields
 	private enum CycleRendering
 	{
 		Left,
@@ -31,14 +43,18 @@ public class SpawnPointManager : MonoBehaviour
 		Down
 	};
 	
-	private readonly Dictionary<string, List<string>> _renderingData = new() { { "all", ["all"] }, { "botZones", [] } };
+	private readonly Dictionary<string, List<string>> _renderingData =
+			new() { { "all", ["all"] }, { "none", ["none"] }, { "botZones", [] } };
 	private int _renderingDataIndex;
-	private readonly List<string> _renderingModes = ["all", "botZones"];
+	private readonly List<string> _renderingModes = [];
 	private int _renderingModeIndex;
+	private string _selectedDataMode = "all";
+	private string _selectedRenderMode = "all";
 	
 	private void Awake()
 	{
 		_cam = Camera.main;
+		_renderingModes.AddRange(_renderingData.Keys);
 		
 		// Check if DLSS is enabled and apply scale
 		if (CameraClass.Instance.SSAA.isActiveAndEnabled)
@@ -52,6 +68,7 @@ public class SpawnPointManager : MonoBehaviour
 	
 	private void Update()
 	{
+		if (!UseOverlay.Value) return;
 		if (OptionUp.Value.IsDown()) { CycleRenderingMode(CycleRendering.Up); }
 		if (OptionDown.Value.IsDown()) { CycleRenderingMode(CycleRendering.Down); }
 		if (OptionLeft.Value.IsDown()) { CycleRenderingMode(CycleRendering.Left); }
@@ -63,13 +80,17 @@ public class SpawnPointManager : MonoBehaviour
 		_zoneNames.Clear();
 		_spawnZoneGroups.Clear();
 		_gameSpawnPoints.Clear();
+		Log($"ZoneNames: {_zoneNames.Count}");
+		Log($"SpawnGroups: {_spawnZoneGroups.Count}");
+		Log($"SpawnPoints: {_gameSpawnPoints.Count}");
 	}
 	
 	private void OnGUI()
 	{
-		if (!UseOverlay.Value) return;
+		// Check if debug is enabled
+		if (!UseOverlay.Value || _selectedDataMode == "none") return;
 		
-		// Create GUIStyle once
+		// Build guiStyle once
 		_guiStyle ??= new GUIStyle(GUI.skin.box)
 		{
 				alignment = TextAnchor.MiddleLeft,
@@ -82,8 +103,7 @@ public class SpawnPointManager : MonoBehaviour
 		foreach (var zoneGroup in _zoneNames)
 		{
 			// Ignore spawn zones not selected by rendering data
-			var renderGroup = _renderingData[_renderingModes[_renderingModeIndex]][_renderingDataIndex];
-			if (zoneGroup != renderGroup && renderGroup != "all") continue;
+			if (zoneGroup != _selectedDataMode && _selectedRenderMode != "all") continue;
 			foreach (var spawnInstance in _spawnZoneGroups[zoneGroup])
 			{
 				// Ignore behind camera
@@ -100,7 +120,7 @@ public class SpawnPointManager : MonoBehaviour
 				SetGUIBoxSize(screenPos, spawnInstance);
 				
 				// Render gui instance
-				GUI.Box(spawnInstance.Display, spawnInstance.GUIText.text, _guiStyle);
+				GUI.Box(spawnInstance.Display, spawnInstance.GUIText, _guiStyle);
 			}
 		}
 	}
@@ -116,26 +136,26 @@ public class SpawnPointManager : MonoBehaviour
 	private void SetGUIText(float cameraDistance, float heightMult, SpawnInstance spawnInstance, string zoneGroup)
 	{
 		// Calculate alpha for fade-out based on distance
-		var alpha = 1f;
-		if (UseOpacity.Value)
-		{
-			alpha = Mathf.Clamp((cameraDistance - RenderRange.Value * heightMult) /
-			                    (OpacityRange.Value * heightMult - RenderRange.Value * heightMult) *
-			                    1f, 0f, 1f);
-		}
+		var alpha = UseOpacity.Value
+				? Mathf.Clamp((cameraDistance - RenderRange.Value * heightMult) /
+				              (OpacityRange.Value * heightMult - RenderRange.Value * heightMult) *
+				              1f, 0f, 1f)
+				: 1f;
 		
 		// Convert text colors to html color codes
-		GUI.backgroundColor = new Color(0f, 0f, 0f, alpha);
-		var labelColor = ColorUtility.ToHtmlStringRGBA(new Color(1f, 1f, 1f, alpha));
+		GUI.backgroundColor = _backGroundColor.SetAlpha(alpha);
+		var labelColor = ColorUtility.ToHtmlStringRGBA(_labelColor.SetAlpha(alpha));
 		var zoneColor = ColorUtility.ToHtmlStringRGBA(spawnInstance.ZoneGroupColor.SetAlpha(alpha));
 		
 		// Set gui text
-		spawnInstance.GUIText.text = $"<color=#{labelColor}>ZoneGroup: </color>" +
-		                             $"<color=#{zoneColor}>{zoneGroup}</color>\n" +
-		                             $"<color=#{labelColor}>Position: </color>" +
-		                             $"<color=#{labelColor}>X:{spawnInstance.Spawn.Position.x:F2}, </color>" +
-		                             $"<color=#{labelColor}>Y:{spawnInstance.Spawn.Position.y:F2}, </color>" +
-		                             $"<color=#{labelColor}>Z:{spawnInstance.Spawn.Position.z:F2}</color>\n";
+		_sb.Clear();
+		_sb.AppendFormat($"<color=#{labelColor}>ZoneGroup: </color>");
+		_sb.AppendFormat($"<color=#{zoneColor}>{zoneGroup}</color>\n");
+		_sb.AppendFormat($"<color=#{labelColor}>Position: </color>");
+		_sb.AppendFormat($"<color=#{labelColor}>X:{spawnInstance.Spawn.Position.x:F2}, </color>");
+		_sb.AppendFormat($"<color=#{labelColor}>Y:{spawnInstance.Spawn.Position.y:F2}, </color>");
+		_sb.AppendFormat($"<color=#{labelColor}>Z:{spawnInstance.Spawn.Position.z:F2}</color>");
+		spawnInstance.GUIText.text = _sb.ToString();
 	}
 	
 	private void CreateSpawnsByZones()
@@ -157,7 +177,7 @@ public class SpawnPointManager : MonoBehaviour
 			CreateMarkerData(spawn);
 		}
 		_renderingData["botZones"].AddRange(_zoneNames);
-		Log($"Found {_zoneNames.Count} total zones.");
+		Notification($"Found {_zoneNames.Count} total zones.", ENotificationIconType.Alert);
 		
 		// Get zone color group
 		foreach (var zoneGroup in _zoneNames)
@@ -165,7 +185,7 @@ public class SpawnPointManager : MonoBehaviour
 			// Use random color
 			var randomColor = zoneGroup != "Ungrouped"
 					? new Color(Random.Range(0f, 1f), Random.Range(0f, 1f), Random.Range(0f, 1f), 0f)
-					: new Color(1f, 1f, 1f, 1f);
+					: _labelColor;
 			foreach (var spawnInstance in _spawnZoneGroups[zoneGroup]) spawnInstance.ZoneGroupColor = randomColor;
 		}
 	}
@@ -244,11 +264,11 @@ public class SpawnPointManager : MonoBehaviour
 			}
 			default: throw new ArgumentOutOfRangeException(nameof(direction), direction, null);
 		}
-		Log($"Direction: {direction.ToString()}, " +
-		    $"RenderIndex: {_renderingModeIndex}, " +
-		    $"RenderMode: '{_renderingModes[_renderingModeIndex]}', " +
-		    $"RenderingDataIndex: {_renderingDataIndex}, " +
-		    $"RenderingDataMode: '{_renderingData[_renderingModes[_renderingModeIndex]][_renderingDataIndex]}'");
+		
+		// Assign selected mode for gui processing
+		_selectedRenderMode = _renderingModes[_renderingModeIndex];
+		_selectedDataMode = _renderingData[_selectedRenderMode][_renderingDataIndex];
+		Notification($"RenderMode: '{_selectedRenderMode}' | DataMode: '{_selectedDataMode}'");
 	}
 	
 	private class SpawnInstance
