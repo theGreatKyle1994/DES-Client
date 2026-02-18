@@ -17,12 +17,24 @@ public class SpawnPointManager : MonoBehaviour
 	
 	private float _screenScale = 1.0f;
 	private GUIStyle _guiStyle;
+	private Camera _cam;
 	
 	private List<SpawnPointMarker> _gameSpawnPoints = [];
 	private readonly HashSet<string> _zoneNames = [];
 	private readonly Dictionary<string, List<SpawnInstance>> _spawnZoneGroups = new();
 	
-	private Camera _cam;
+	private enum CycleRendering
+	{
+		Left,
+		Right,
+		Up,
+		Down
+	};
+	
+	private readonly Dictionary<string, List<string>> _renderingData = new() { { "all", ["all"] }, { "botZones", [] } };
+	private int _renderingDataIndex;
+	private readonly List<string> _renderingModes = ["all", "botZones"];
+	private int _renderingModeIndex;
 	
 	private void Awake()
 	{
@@ -38,6 +50,14 @@ public class SpawnPointManager : MonoBehaviour
 		CreateSpawnsByZones();
 	}
 	
+	private void Update()
+	{
+		if (OptionUp.Value.IsDown()) { CycleRenderingMode(CycleRendering.Up); }
+		if (OptionDown.Value.IsDown()) { CycleRenderingMode(CycleRendering.Down); }
+		if (OptionLeft.Value.IsDown()) { CycleRenderingMode(CycleRendering.Left); }
+		if (OptionRight.Value.IsDown()) { CycleRenderingMode(CycleRendering.Right); }
+	}
+	
 	private void OnDestroy()
 	{
 		_zoneNames.Clear();
@@ -47,7 +67,7 @@ public class SpawnPointManager : MonoBehaviour
 	
 	private void OnGUI()
 	{
-		if (!useOverlay.Value) return;
+		if (!UseOverlay.Value) return;
 		
 		// Create GUIStyle once
 		_guiStyle ??= new GUIStyle(GUI.skin.box)
@@ -59,8 +79,11 @@ public class SpawnPointManager : MonoBehaviour
 		};
 		
 		// Display each group
-		foreach (var zoneGroup in _spawnZoneGroups.Keys)
+		foreach (var zoneGroup in _zoneNames)
 		{
+			// Ignore spawn zones not selected by rendering data
+			var renderGroup = _renderingData[_renderingModes[_renderingModeIndex]][_renderingDataIndex];
+			if (zoneGroup != renderGroup && renderGroup != "all") continue;
 			foreach (var spawnInstance in _spawnZoneGroups[zoneGroup])
 			{
 				// Ignore behind camera
@@ -133,18 +156,16 @@ public class SpawnPointManager : MonoBehaviour
 			}
 			CreateMarkerData(spawn);
 		}
+		_renderingData["botZones"].AddRange(_zoneNames);
 		Log($"Found {_zoneNames.Count} total zones.");
 		
 		// Get zone color group
 		foreach (var zoneGroup in _zoneNames)
 		{
-			Log($"{zoneGroup}");
-			
 			// Use random color
 			var randomColor = zoneGroup != "Ungrouped"
 					? new Color(Random.Range(0f, 1f), Random.Range(0f, 1f), Random.Range(0f, 1f), 0f)
 					: new Color(1f, 1f, 1f, 1f);
-			Log($"Zonegroup: {zoneGroup} assigned color ({randomColor.ToString()}) ");
 			foreach (var spawnInstance in _spawnZoneGroups[zoneGroup]) spawnInstance.ZoneGroupColor = randomColor;
 		}
 	}
@@ -177,6 +198,57 @@ public class SpawnPointManager : MonoBehaviour
 		                 1f;
 		if (heightMult < 1f) { heightMult = 1f; }
 		return heightMult * BirdsEyeMult.Value * 4f;
+	}
+	
+	private void CycleRenderingMode(CycleRendering direction)
+	{
+		// Check if mode values are empty
+		if (direction is CycleRendering.Left or CycleRendering.Right &&
+		    _renderingData[_renderingModes[_renderingModeIndex]].Count == 0)
+		{
+			Log($"RenderingDataMode: " +
+			    $"'{_renderingData[_renderingModes[_renderingModeIndex]][_renderingDataIndex]}' is empty.");
+			return;
+		}
+		
+		// Handle mode cycling
+		switch (direction)
+		{
+			case CycleRendering.Up:
+			{
+				_renderingModeIndex--;
+				if (_renderingModeIndex < 0) _renderingModeIndex = _renderingModes.Count - 1;
+				_renderingDataIndex = 0;
+				break;
+			}
+			case CycleRendering.Down:
+			{
+				_renderingModeIndex++;
+				if (_renderingModeIndex >= _renderingModes.Count) _renderingModeIndex = 0;
+				_renderingDataIndex = 0;
+				break;
+			}
+			case CycleRendering.Left:
+			{
+				_renderingDataIndex--;
+				if (_renderingDataIndex < 0)
+					_renderingDataIndex = _renderingData[_renderingModes[_renderingModeIndex]].Count - 1;
+				break;
+			}
+			case CycleRendering.Right:
+			{
+				_renderingDataIndex++;
+				if (_renderingDataIndex >= _renderingData[_renderingModes[_renderingModeIndex]].Count)
+					_renderingDataIndex = 0;
+				break;
+			}
+			default: throw new ArgumentOutOfRangeException(nameof(direction), direction, null);
+		}
+		Log($"Direction: {direction.ToString()}, " +
+		    $"RenderIndex: {_renderingModeIndex}, " +
+		    $"RenderMode: '{_renderingModes[_renderingModeIndex]}', " +
+		    $"RenderingDataIndex: {_renderingDataIndex}, " +
+		    $"RenderingDataMode: '{_renderingData[_renderingModes[_renderingModeIndex]][_renderingDataIndex]}'");
 	}
 	
 	private class SpawnInstance
